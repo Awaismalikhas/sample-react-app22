@@ -37,7 +37,7 @@ jobs:
           username: ubuntu   # change if you use ec2-user / ubuntu / etc.
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            docker stop my-app || true
-            docker rm my-app || true
-            docker pull ${{ steps.login-ecr.outputs.registry }}/my-app:latest
-            docker run -d -p 80:80 --name my-app ${{ steps.login-ecr.outputs.registry }}/my-app:latest
+            docker stop myapp || true
+            docker rm myapp || true
+            docker pull ${{ steps.login-ecr.outputs.registry }}/myapp:latest
+            docker run -d -p 80:80 --name myapp ${{ steps.login-ecr.outputs.registry }}/myapp:latest
