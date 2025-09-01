@@ -51,4 +51,4 @@ jobs:
 
             # Pull and run new container
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            docker run -d -p 80:80 --name myapp $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            docker run -d -p 5000:5000 --name myapp $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
