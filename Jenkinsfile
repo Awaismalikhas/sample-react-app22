@@ -1,106 +1,68 @@
-// pipeline {
-//     agent any
-//     environment {
-//         NEW_VERSION = '1.3.0'
-//         containerName = 'Sample-React-App'
-//     }
-
-//     stages {
-//         stage("Building the Image") {
-//             steps {
-//                 script {
-//                     echo 'Building the Image'
-//                     sh 'docker build -t sample-react-app:latest .'
-//                 }
-//             }
-//         }    
-
-//         stage("Stopping the Existing Container") {
-//             steps {
-//                 script {
-//                     def containerName = 'Sample-React-App'
-//                     def containerExists = sh(script: "docker ps -a -q -f name=${containerName}", returnStdout: true).trim()
-//                     if (containerExists) {
-//                         echo 'Stopping the container'
-//                         sh "docker stop ${containerName}"
-//                         //sh 'docker rm Sample-React-App'
-    
-//                     }
-//                     else {
-//                         echo 'Container does not exist'
-//                     }
-//                 }
-//             }
-//         }
-
-//         stage("Running the Container") {
-//             steps {
-//                 sh 'docker run -dp 3000:3000 --rm --name Sample-React-App sample-react-app:latest'
-//             }
-//         }
-//         stage("deploy") {
-
-//             steps {
-//                 echo 'deploying the app'
-
-//             }
-//         }
-//     }
-// }
-
-def gv
-
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "react-frontend"
+        CONTAINER_NAME = "react-app"
+        EC2_USER = "ubuntu"
+        EC2_HOST = "13.250.123.62"
+        SSH_KEY = "ec2-ssh-access"  // Jenkins credential ID for private key
+    }
+
     stages {
-        stage("init") {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'stagging', url: 'git@github.com:Awaismalikhas/sample-react-app22.git'
+            }
+        }
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    gv =load "script.groovy"
+                    sh "docker build -t ${IMAGE_NAME}:latest ."
                 }
             }
         }
-        stage("build") {
+
+        stage('Save and Transfer Image') {
             steps {
                 script {
-                    gv.buildApp()
+                    // Save image to tar file
+                    sh "docker save -o ${IMAGE_NAME}.tar ${IMAGE_NAME}:latest"
+
+                    // Copy image to EC2 instance using SSH
+                    sshagent(['ec2-ssh-access']) {
+                        sh """
+                        scp -o StrictHostKeyChecking=no ${IMAGE_NAME}.tar ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/
+                        """
+                    }
                 }
             }
         }
-        stage("test") {
+
+        stage('Deploy on EC2') {
             steps {
-                script {
-                    gv.testApp()
-                }
-            }
-        }
-        stage("deploy") {
-            steps {
-                script {
-                    gv.deployApp()
+                sshagent(['ec2-ssh-access']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                      docker load -i /home/${EC2_USER}/${IMAGE_NAME}.tar &&
+                      docker stop ${CONTAINER_NAME} || true &&
+                      docker rm ${CONTAINER_NAME} || true &&
+                      docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest
+                    '
+                    """
                 }
             }
         }
     }
+
+    post {
+        success {
+            echo "✅ React app deployed successfully from Jenkins image!"
+        }
+        failure {
+            echo "❌ Deployment failed!"
+        }
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
