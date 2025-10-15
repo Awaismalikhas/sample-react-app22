@@ -2,8 +2,13 @@ pipeline {
     agent any
 
     environment {
+<<<<<<< HEAD
         IMAGE_NAME = "react-frontend-stg"
         CONTAINER_NAME = "react-app-stg"
+=======
+        IMAGE_NAME = "react-frontend"
+        CONTAINER_NAME = "react-app"
+>>>>>>> 6cd042b (Update Jenkinsfile)
         EC2_USER = "ubuntu"
         EC2_HOST = "13.250.123.62"
         SSH_KEY = "ec2-ssh-access"  // Jenkins credential ID for private key
@@ -13,6 +18,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
+
                 git branch: 'stagging', url: 'git@github.com:Awaismalikhas/sample-react-app22.git'
             }
         }
@@ -49,7 +55,11 @@ pipeline {
                       docker load -i /home/${EC2_USER}/${IMAGE_NAME}.tar &&
                       docker stop ${CONTAINER_NAME} || true &&
                       docker rm ${CONTAINER_NAME} || true &&
+<<<<<<< HEAD
                       docker run -d -p 4000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest
+=======
+                      docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest
+>>>>>>> 6cd042b (Update Jenkinsfile)
                     '
                     """
                 }
