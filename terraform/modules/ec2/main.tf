@@ -52,6 +52,8 @@ resource "aws_instance" "ec2_instance" {
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   user_data = <<-EOF
             #!/bin/bash
+            set -e
+            set -x
             
             apt-get update -y
 
@@ -62,7 +64,7 @@ resource "aws_instance" "ec2_instance" {
             systemctl enable docker
             systemctl start docker
 
-            
+            docker --version
             usermod -aG docker ubuntu
 
           
