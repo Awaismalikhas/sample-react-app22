@@ -1,0 +1,5 @@
+instance_type = "t2.micro"
+instance_name = "dev-instance"
+aws_region = "ap-southeast-1"
+ami_id = "ami-0933f1385008d33c4"
+key_name = "jenkins-server"
