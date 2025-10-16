@@ -43,67 +43,35 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "ec2_instance" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  subnet_id     = data.aws_subnets.default.ids[0]
-  key_name      = var.key_name
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  subnet_id              = data.aws_subnets.default.ids[0]
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  
+
   user_data = <<-EOF
     #!/bin/bash
-    set -e  # Exit on any error
-    set -x  # Debug output
-    
-    # Update system
-    echo "Updating system packages..."
     apt-get update -y
-    
-    # Install prerequisites
-    echo "Installing prerequisites..."
-    apt-get install -y \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        gnupg \
-        lsb-release
-    
-    # Add Docker's official GPG key
-    echo "Adding Docker GPG key..."
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    
+    apt-get install -y ca-certificates curl
+
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+
     # Add Docker repository
-    echo "Adding Docker repository..."
     echo \
-      "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-      \$(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    # Update again with Docker repo
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+
     apt-get update -y
-    
-    # Install Docker
-    echo "Installing Docker..."
-    apt-get install -y docker-ce docker-ce-cli containerd.io
-    
-    # Start and enable Docker
-    echo "Starting Docker service..."
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
     systemctl enable docker
     systemctl start docker
-    
-    # Add ubuntu user to docker group
-    echo "Adding ubuntu user to docker group..."
     usermod -aG docker ubuntu
-    
-    # Restart Docker service to apply group changes
-    echo "Restarting Docker service..."
     systemctl restart docker
-    
-    # Verify installation
-    echo "Verifying Docker installation..."
-    docker --version
-    
-    # Check Docker service status after restart
-    echo "Checking Docker service status..."
-    systemctl status docker --no-pager
   EOF
 
   tags = {
