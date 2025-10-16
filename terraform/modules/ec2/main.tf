@@ -83,6 +83,7 @@ resource "aws_instance" "ec2_instance" {
     systemctl enable docker
     systemctl start docker
     usermod -aG docker ubuntu
+    chmod 666 /var/run/docker.sock
     systemctl restart docker
   EOF
 
