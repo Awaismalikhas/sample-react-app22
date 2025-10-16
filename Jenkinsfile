@@ -1,65 +1,113 @@
 pipeline {
-    agent any
-
-    environment {
-<<<<<<< HEAD
-        IMAGE_NAME = "react-frontend-stg"
-        CONTAINER_NAME = "react-app-stg"
-=======
-        IMAGE_NAME = "react-frontend"
-        CONTAINER_NAME = "react-app"
->>>>>>> 6cd042b (Update Jenkinsfile)
-        EC2_USER = "ubuntu"
-        EC2_HOST = "13.250.123.62"
-        SSH_KEY = "ec2-ssh-access"  // Jenkins credential ID for private key
+    agent any 
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'stage', 'prod'], description: 'Select environment to deploy')
     }
 
-    stages {
+    environment {
+        IMAGE_NAME     = "react-frontend"
+        CONTAINER_NAME = "react-app"
+        EC2_USER       = "ubuntu"
+    }
 
-        stage('Checkout Code') {
+    stages { 
+        stage('SCM Checkout') {
             steps {
-
                 git branch: 'stagging', url: 'git@github.com:Awaismalikhas/sample-react-app22.git'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Run SonarQube Analysis') {
+            environment {
+                scannerHome = tool 'sonarqube'
+            }
             steps {
-                script {
-                    sh "docker build -t ${IMAGE_NAME}:latest ."
+                withSonarQubeEnv(credentialsId: 'jenkins-sonar-token', installationName: 'jenkins-sonar') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=sample-react-app \
+                        -Dsonar.sources=. \
+                        -Dsonar.projectName="Sample React App"
+                    """
                 }
             }
         }
 
-        stage('Save and Transfer Image') {
+        // stage('Wait for Quality Gate') {
+        //     steps {
+        //         timeout(time: 1, unit: 'HOURS') {
+        //             waitForQualityGate abortPipeline: true
+        //         }
+        //     }
+        // }
+
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME}:${params.ENVIRONMENT} ."
+            }
+        }
+
+        stage('Terraform Init & Apply') {
+            environment {
+                AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+            }
+            steps {
+                dir('terraform') {
+                    sh """
+                        terraform init -reconfigure
+                        terraform workspace select ${params.ENVIRONMENT} || terraform workspace new ${params.ENVIRONMENT}
+                        terraform apply -var-file="${params.ENVIRONMENT}.tfvars" -auto-approve
+                    """
+                }
+            }
+        }
+
+        stage('Fetch EC2 Public IP') {
             steps {
                 script {
-                    // Save image to tar file
-                    sh "docker save -o ${IMAGE_NAME}.tar ${IMAGE_NAME}:latest"
-
-                    // Copy image to EC2 instance using SSH
-                    sshagent(['ec2-ssh-access']) {
-                        sh """
-                        scp -o StrictHostKeyChecking=no ${IMAGE_NAME}.tar ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/
-                        """
+                    dir('terraform') {
+                        env.EC2_HOST = sh(script: "terraform output -raw ec2_public_ip", returnStdout: true).trim()
                     }
+                    echo "✅ EC2 Public IP for ${params.ENVIRONMENT}: ${env.EC2_HOST}"
+                }
+            }
+        }
+
+        stage('Select SSH Key Based on Environment') {
+            steps {
+                script {
+                    if (params.ENVIRONMENT == 'dev') {
+                        env.SSH_KEY = 'ec2-ssh-dev'
+                    } else if (params.ENVIRONMENT == 'stage') {
+                        env.SSH_KEY = 'ec2-ssh-stage'
+                    } else {
+                        env.SSH_KEY = 'ec2-ssh-prod'
+                    }
+                    echo "🔐 Using SSH key credential: ${env.SSH_KEY}"
+                }
+            }
+        }
+
+        stage('Transfer Docker Image') {
+            steps {
+                sh "docker save -o ${IMAGE_NAME}.tar ${IMAGE_NAME}:${params.ENVIRONMENT}"
+                sshagent([env.SSH_KEY]) {
+                    sh "scp -o StrictHostKeyChecking=no ${IMAGE_NAME}.tar ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/"
                 }
             }
         }
 
         stage('Deploy on EC2') {
             steps {
-                sshagent(['ec2-ssh-access']) {
+                sshagent([env.SSH_KEY]) {
                     sh """
                     ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                       docker load -i /home/${EC2_USER}/${IMAGE_NAME}.tar &&
                       docker stop ${CONTAINER_NAME} || true &&
                       docker rm ${CONTAINER_NAME} || true &&
-<<<<<<< HEAD
-                      docker run -d -p 4000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest
-=======
-                      docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest
->>>>>>> 6cd042b (Update Jenkinsfile)
+                      docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}:${params.ENVIRONMENT}
                     '
                     """
                 }
@@ -69,10 +117,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ React app deployed successfully from Jenkins image!"
+            echo "✅ React app deployed successfully to ${params.ENVIRONMENT} (${env.EC2_HOST})!"
         }
         failure {
-            echo "❌ Deployment failed!"
+            echo "❌ Deployment failed on ${params.ENVIRONMENT}!"
         }
     }
 }
