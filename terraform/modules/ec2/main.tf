@@ -1,3 +1,7 @@
+###############################################
+# Data Sources
+###############################################
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -8,6 +12,10 @@ data "aws_subnets" "default" {
     values = [data.aws_vpc.default.id]
   }
 }
+
+###############################################
+# Security Group
+###############################################
 
 resource "aws_security_group" "ec2_sg" {
   name        = "${var.instance_type}-ec2-sg"
@@ -42,6 +50,10 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
+###############################################
+# EC2 Instance
+###############################################
+
 resource "aws_instance" "ec2_instance" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
@@ -62,7 +74,7 @@ resource "aws_instance" "ec2_instance" {
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
       https://download.docker.com/linux/ubuntu \
-      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      $(. /etc/os-release && echo "$${UBUNTU_CODENAME:-$${VERSION_CODENAME}}") stable" | \
       tee /etc/apt/sources.list.d/docker.list > /dev/null
 
     apt-get update -y
